@@ -1,0 +1,12 @@
+Completed:
+Project 3 description for portfolio
+Minimum dataset is available
+Researched Track D Estate Insight property valuer
+
+Will do:
+Schema columns for postgres database
+worked on dataloader
+fastapi skeleton
+
+Blocker:
+Sagemaker API
