@@ -1,10 +1,11 @@
 """FastAPI app (API endpoints)"""
 from fastapi import FastAPI
-from pydantic import BaseModel
-from transformers import pipeline
+
 import os
 import time
 import logging
+
+from app.routers import classify
 
 # implementing logger functionality
 logger = logging.getLogger(__name__)
@@ -24,5 +25,5 @@ app = FastAPI(
 def get_root():
     return {"message" : "Hello from main"}
 
-class PromptRequest(BaseModel):
-    prompt : str
+# Routers
+app.include_router(classify.router)
