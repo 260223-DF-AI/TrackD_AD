@@ -1,3 +1,5 @@
+import random
+
 import torch
 from torch.utils.data import Dataset, DataLoader
 from torchvision import transforms
@@ -6,6 +8,7 @@ from pathlib import Path
 import matplotlib.pyplot as plt
 
 class RealEstateDataset(Dataset):
+    """Dataset for real estate images. Labels: House"""
     def __init__(self, root_dir, transform=None):
         self.root_path = Path(root_dir)
         self.transform = transform
@@ -40,13 +43,20 @@ image_transform = transforms.Compose([
     transforms.Resize((224, 224)),
     transforms.ToTensor()])
 
-img_dir = 'house_dataset/'
-image_dataset = RealEstateDataset(img_dir, image_transform)
-print(f"length of dataset: {len(image_dataset)}")
-img, label1, label2 = image_dataset[650]
-print()
-print({'Image shape': img.shape})
-print({'Label1': label1})
-print({'Label2': label2})
-plt.imshow(img.permute(1, 2, 0))
-plt.show()
+if __name__ == "__main__":
+
+    # Example test of dataset
+    img_dir = 'data/'
+    image_dataset = RealEstateDataset(img_dir, image_transform)
+    num_images = len(image_dataset)
+    print(f"length of dataset: {num_images}")
+    img, label1, label2 = image_dataset[random.randint(0, num_images - 1)]
+    print()
+    print({'Image shape': img.shape})
+    print({'Assessment Quality': label1})
+    print({'House Section': label2})
+    fix, ax = plt.subplots()
+    ax.set_title(f"Assessment Quality: {label1}, House Section: {label2}")
+    ax.axis('off')
+    plt.imshow(img.permute(1, 2, 0))
+    plt.show()
