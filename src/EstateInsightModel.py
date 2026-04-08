@@ -72,15 +72,20 @@ def train(dataloader, model, loss_fn, optimizer, epoch, device):
     for batch, (x, quality_label, type_label) in enumerate(dataloader):
         x, quality_label, type_label = x.to(device), quality_label.to(device), type_label.to(device)
         pred_quality, pred_type = model(x)
-        loss_quality = loss_fn(pred_quality, quality_label)
-        loss_type = loss_fn(pred_type, type_label)
+
+        # convert integer labels to one-hot for BCEWithLogitsLoss
+        quality_target = nn.functional.one_hot(quality_label, num_classes=model.quality_head.out_features).float()
+        type_target = nn.functional.one_hot(type_label, num_classes=model.type_head.out_features).float()
+
+        loss_quality = loss_fn(pred_quality, quality_target)  # compute loss for room quality
+        loss_type = loss_fn(pred_type, type_target)  # compute loss for room type
         loss = loss_quality + loss_type
 
         optimizer.zero_grad()
         loss.backward()
         optimizer.step()
 
-        print(f"Batch {batch}: Loss = {loss.item():>7f}")
+        print(f"Batch {batch}: Loss = {loss.item():>7f} (Quality {loss_quality.item():.6f}, Type {loss_type.item():.6f})")
     
     print(f"Epoch {epoch+1} completed: {batch+1} batches processed")
     return model
@@ -97,17 +102,23 @@ def evaluate(dataloader, model, loss_fn, device):
     model.eval()
 
     with torch.no_grad():
+        batch_count = 0
         for batch, (x, quality_label, type_label) in enumerate(dataloader):
             x, quality_label, type_label = x.to(device), quality_label.to(device), type_label.to(device)
             pred_quality, pred_type = model(x)
 
             batch_size = quality_label.size(0)
             total += batch_size
+            batch_count += 1
 
-            # accumulate loss for both heads
-            loss_q = loss_fn(pred_quality, quality_label).item()
-            loss_t = loss_fn(pred_type, type_label).item()
+            # convert to one-hot for BCEWithLogitsLoss
+            quality_target = nn.functional.one_hot(quality_label, num_classes=model.quality_head.out_features).float()
+            type_target = nn.functional.one_hot(type_label, num_classes=model.type_head.out_features).float()
+
+            loss_q = loss_fn(pred_quality, quality_target).item()
+            loss_t = loss_fn(pred_type, type_target).item()
             test_loss += (loss_q + loss_t)
+            print("Batch {}: Loss = {:.6f} (Quality {:.6f}, Type {:.6f})".format(batch, loss_q + loss_t, loss_q, loss_t))
 
             # predictions
             q_preds = pred_quality.argmax(1)
@@ -146,7 +157,7 @@ def main():
         filter(lambda p: p.requires_grad, model.parameters()), 
         lr=0.001
     )
-    criterion = nn.CrossEntropyLoss()
+    criterion = nn.BCEWithLogitsLoss()
 
     print("--- Load Best Model ---")
     if os.path.exists(MODEL_PATH):
