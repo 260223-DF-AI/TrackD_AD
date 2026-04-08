@@ -9,7 +9,7 @@ from torchvision import transforms, datasets
 from data_loader import RealEstateDataset
 
 
-DATA_ROOT = "data/"
+DATA_ROOT = "src/data/"
 TRAIN_DIR = os.path.join(DATA_ROOT, "train")
 TEST_DIR = os.path.join(DATA_ROOT, "test")
 LOG_DIR = "runs/estate_insight_logs"
@@ -88,8 +88,11 @@ def train(dataloader, model, loss_fn, optimizer, epoch, device):
 def evaluate(dataloader, model, loss_fn, device):
     print()
     print("--- Eval Model ---")
-
-    test_loss, correct, total= 0, 0, 0
+    test_loss = 0.0
+    correct_quality = 0
+    correct_type = 0
+    correct_both = 0
+    total = 0
 
     model.eval()
 
@@ -97,16 +100,34 @@ def evaluate(dataloader, model, loss_fn, device):
         for batch, (x, quality_label, type_label) in enumerate(dataloader):
             x, quality_label, type_label = x.to(device), quality_label.to(device), type_label.to(device)
             pred_quality, pred_type = model(x)
-            total += len(quality_label)
-            test_loss += loss_fn(pred_quality, quality_label).item()
-            correct += int((pred_quality.argmax(1) == quality_label).type(torch.float).sum().item())
-            if batch == 9: break
-    
-    
+
+            batch_size = quality_label.size(0)
+            total += batch_size
+
+            # accumulate loss for both heads
+            loss_q = loss_fn(pred_quality, quality_label).item()
+            loss_t = loss_fn(pred_type, type_label).item()
+            test_loss += (loss_q + loss_t)
+
+            # predictions
+            q_preds = pred_quality.argmax(1)
+            t_preds = pred_type.argmax(1)
+
+            correct_quality += int((q_preds == quality_label).type(torch.long).sum().item())
+            correct_type += int((t_preds == type_label).type(torch.long).sum().item())
+            correct_both += int(((q_preds == quality_label) & (t_preds == type_label)).type(torch.long).sum().item())
+
+            if batch == 9:
+                break
+
     print("Total Samples: ", total)
-    print("Correct Predictions: ", correct)
-    print(f"Test Loss: {test_loss / total:.4f}")
-    print(f"Evaluation: Accuracy = {int(100 * correct / total)}%" )
+    print("Correct Quality Predictions: ", correct_quality)
+    print("Correct Type Predictions: ", correct_type)
+    print("Correct Both (quality + type): ", correct_both)
+    print(f"Test Loss: {test_loss / max(total,1):.4f}")
+    print(f"Evaluation: Quality Accuracy = {int(100 * correct_quality / max(total,1))}%")
+    print(f"Evaluation: Type Accuracy = {int(100 * correct_type / max(total,1))}%")
+    print(f"Evaluation: Combined Accuracy = {int(100 * correct_both / max(total,1))}%")
 
 
 def main():
