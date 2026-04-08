@@ -18,7 +18,7 @@ logger.setLevel(logging.INFO)
 router = APIRouter()
 
 @router.post(
-        "/classify",
+        "/analyze",
         response_model=ClassifyResponse,
         summary="Classify a room image",
         description=(

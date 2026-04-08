@@ -14,8 +14,8 @@ class RealEstateDataset(Dataset):
         self.transform = transform
         self.image_paths = list(self.root_path.rglob("*.jpg"))
 
-        quality_label_names = sorted(list(p.parent.parent.name for p in self.image_paths))
-        house_section_label_names = sorted(list(p.parent.name for p in self.image_paths))
+        quality_label_names = sorted(list(set(p.parent.parent.name for p in self.image_paths)))
+        house_section_label_names = sorted(list(set(p.parent.name for p in self.image_paths)))
 
         self.quality_label_map = {name: idx for idx, name in enumerate(quality_label_names)}
         self.section_label_map = {name: idx for idx, name in enumerate(house_section_label_names)}
@@ -35,8 +35,7 @@ class RealEstateDataset(Dataset):
         if self.transform:
             image = self.transform(image)
 
-        #return image, torch.tensor(quality_idx), torch.tensor(section_idx)
-        return image, quality_label, house_section_label
+        return image, torch.tensor(quality_idx, dtype=torch.long), torch.tensor(section_idx, dtype=torch.long)
     
 #import this transform where the dataset is used, so we can reuse it in the model training code as well
 image_transform = transforms.Compose([
