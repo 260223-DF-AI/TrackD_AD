@@ -22,13 +22,16 @@ if not os.path.exists(TRAIN_DIR):
 
 image_transform = transforms.Compose([
     transforms.Resize((224, 224)),
+    transforms.RandomHorizontalFlip(0.5),
+    transforms.RandomRotation(15),
+    transforms.ColorJitter(brightness=0.2, contrast=0.2),
     transforms.ToTensor()])
 
 train_dataset = RealEstateDataset(TRAIN_DIR, transform=image_transform)
 test_dataset = RealEstateDataset(TEST_DIR, transform=image_transform)
 
-train_loader = DataLoader(train_dataset, batch_size=10, shuffle=True)
-test_loader = DataLoader(test_dataset, batch_size=10, shuffle=False)
+train_loader = DataLoader(train_dataset, batch_size=32, shuffle=True)
+test_loader = DataLoader(test_dataset, batch_size=32, shuffle=False)
 
 num_quality_classes = len(train_dataset.quality_label_map)
 num_type_classes = len(train_dataset.section_label_map)
@@ -55,6 +58,10 @@ class EstateInsightModel(nn.Module):
         # Two separate outputs for the quality and type classifications
         self.quality_head = nn.Linear(in_features, num_quality_classes)
         self.type_head = nn.Linear(in_features, num_type_classes)
+        
+        for name, param in self.model.named_parameters():
+            if "layer4" in name or "fc" in name:
+                param.requires_grad = True
 
     def forward(self, x):
         features = self.model(x)
@@ -74,11 +81,11 @@ def train(dataloader, model, loss_fn, optimizer, epoch, device):
         pred_quality, pred_type = model(x)
 
         # convert integer labels to one-hot for BCEWithLogitsLoss
-        quality_target = nn.functional.one_hot(quality_label, num_classes=model.quality_head.out_features).float()
-        type_target = nn.functional.one_hot(type_label, num_classes=model.type_head.out_features).float()
+        # quality_target = nn.functional.one_hot(quality_label, num_classes=model.quality_head.out_features).float()
+        # type_target = nn.functional.one_hot(type_label, num_classes=model.type_head.out_features).float()
 
-        loss_quality = loss_fn(pred_quality, quality_target)  # compute loss for room quality
-        loss_type = loss_fn(pred_type, type_target)  # compute loss for room type
+        loss_quality = loss_fn(pred_quality, quality_label)  # compute loss for room quality
+        loss_type = loss_fn(pred_type, type_label)  # compute loss for room type
         loss = loss_quality + loss_type
 
         optimizer.zero_grad()
@@ -112,11 +119,11 @@ def evaluate(dataloader, model, loss_fn, device):
             batch_count += 1
 
             # convert to one-hot for BCEWithLogitsLoss
-            quality_target = nn.functional.one_hot(quality_label, num_classes=model.quality_head.out_features).float()
-            type_target = nn.functional.one_hot(type_label, num_classes=model.type_head.out_features).float()
+            # quality_target = nn.functional.one_hot(quality_label, num_classes=model.quality_head.out_features).float()
+            # type_target = nn.functional.one_hot(type_label, num_classes=model.type_head.out_features).float()
 
-            loss_q = loss_fn(pred_quality, quality_target).item()
-            loss_t = loss_fn(pred_type, type_target).item()
+            loss_q = loss_fn(pred_quality, quality_label)
+            loss_t = loss_fn(pred_type, type_label)
             test_loss += (loss_q + loss_t)
             print("Batch {}: Loss = {:.6f} (Quality {:.6f}, Type {:.6f})".format(batch, loss_q + loss_t, loss_q, loss_t))
 
@@ -128,8 +135,6 @@ def evaluate(dataloader, model, loss_fn, device):
             correct_type += int((t_preds == type_label).type(torch.long).sum().item())
             correct_both += int(((q_preds == quality_label) & (t_preds == type_label)).type(torch.long).sum().item())
 
-            if batch == 9:
-                break
 
     print("Total Samples: ", total)
     print("Correct Quality Predictions: ", correct_quality)
@@ -139,6 +144,8 @@ def evaluate(dataloader, model, loss_fn, device):
     print(f"Evaluation: Quality Accuracy = {int(100 * correct_quality / max(total,1))}%")
     print(f"Evaluation: Type Accuracy = {int(100 * correct_type / max(total,1))}%")
     print(f"Evaluation: Combined Accuracy = {int(100 * correct_both / max(total,1))}%")
+
+    return test_loss / batch_count
 
 
 def main():
@@ -152,13 +159,14 @@ def main():
     best_loss = float('inf')
     
 
-    NUM_EPOCHS = 1
+    NUM_EPOCHS = 20
     optimizer = optim.Adam(
         filter(lambda p: p.requires_grad, model.parameters()), 
         lr=0.001
     )
-    criterion = nn.BCEWithLogitsLoss()
-
+    # criterion = nn.BCEWithLogitsLoss()
+    criterion = nn.CrossEntropyLoss()
+    scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=5, gamma=0.1)
     print("--- Load Best Model ---")
     if os.path.exists(MODEL_PATH):
         best_model = torch.load(MODEL_PATH, weights_only=True)
@@ -169,7 +177,8 @@ def main():
 
     for epoch in range(NUM_EPOCHS):
         model = train(train_loader, model, criterion, optimizer, epoch, device)
-        evaluate(test_loader, model, criterion, device)
+        test_loss = evaluate(test_loader, model, criterion, device)
+        scheduler.step(test_loss)
 
 if __name__ == "__main__":
     main()
