@@ -21,14 +21,20 @@ if not os.path.exists(TRAIN_DIR):
     sys.exit(1)
 
 image_transform = transforms.Compose([
-    transforms.Resize((224, 224)),
-    transforms.ToTensor()])
+    transforms.Resize((256, 256)),
+    transforms.CenterCrop(224),
+    transforms.RandomHorizontalFlip(p=0.3),
+    transforms.RandomVerticalFlip(p=0.3),
+    transforms.RandomRotation(45),
+    transforms.ToTensor(),
+    transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
+    ])
 
 train_dataset = RealEstateDataset(TRAIN_DIR, transform=image_transform)
 test_dataset = RealEstateDataset(TEST_DIR, transform=image_transform)
 
-train_loader = DataLoader(train_dataset, batch_size=10, shuffle=True)
-test_loader = DataLoader(test_dataset, batch_size=10, shuffle=False)
+train_loader = DataLoader(train_dataset, batch_size=15, shuffle=True)
+test_loader = DataLoader(test_dataset, batch_size=15, shuffle=False)
 
 num_quality_classes = len(train_dataset.quality_label_map)
 num_type_classes = len(train_dataset.section_label_map)
@@ -63,7 +69,7 @@ class EstateInsightModel(nn.Module):
         return quality_output, type_output
     
 class EarlyStop:
-    def __init__(self, patience = 10):
+    def __init__(self, patience = 20):
         self.patience = patience
         self.best_loss = float('inf')
         self.counter = 0
@@ -81,7 +87,7 @@ class EarlyStop:
                 self.early_stop = True
             return self.early_stop, False
 
-def train(dataloader, model, loss_fn, best_loss, optimizer, epoch, early_stop, device):
+def train(dataloader, model, loss_fn, best_loss, optimizer, epoch, early_stop, device, scaler):
     print()
 
     print(f"\n--- Training Epoch {epoch+1} ---")
@@ -105,6 +111,7 @@ def train(dataloader, model, loss_fn, best_loss, optimizer, epoch, early_stop, d
         if is_improved:
             best_loss = loss
 
+            print(f"Better loss value found, saving model with loss: {loss.item()}")
             torch.save({
                 'epoch': epoch,
                 'model_state_dict': model.state_dict(),
@@ -182,8 +189,8 @@ def main():
         lr=0.001
     )
     criterion = nn.CrossEntropyLoss()
-
-    early_stop = EarlyStop() # patience = 20
+    early_stop = EarlyStop(patience=20) # patience = 20
+    scaler = torch.amp.GradScaler()
 
     print("--- Load Best Model ---")
     if os.path.exists(MODEL_PATH):
@@ -194,7 +201,12 @@ def main():
         print("Loaded best model from ", MODEL_PATH)
 
     for epoch in range(NUM_EPOCHS):
-        model, best_loss, should_stop = train(train_loader, model, criterion, best_loss, optimizer, epoch, early_stop, device)
+        model, best_loss, should_stop = train(
+            train_loader, model, 
+            criterion, best_loss, 
+            optimizer, epoch, 
+            early_stop, device, scaler)
+        
         evaluate(test_loader, model, criterion, device)
 
         if should_stop:
