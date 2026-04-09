@@ -5,6 +5,7 @@ import torch.nn as nn
 import os
 import sys
 from torch.utils.data import DataLoader, Dataset
+from torch.utils.tensorboard import SummaryWriter
 from torchvision import transforms, datasets
 from data_loader import RealEstateDataset
 
@@ -30,8 +31,8 @@ image_transform = transforms.Compose([
 train_dataset = RealEstateDataset(TRAIN_DIR, transform=image_transform)
 test_dataset = RealEstateDataset(TEST_DIR, transform=image_transform)
 
-train_loader = DataLoader(train_dataset, batch_size=32, shuffle=True)
-test_loader = DataLoader(test_dataset, batch_size=32, shuffle=False)
+train_loader = DataLoader(train_dataset, batch_size=64, shuffle=True)
+test_loader = DataLoader(test_dataset, batch_size=16, shuffle=False)
 
 num_quality_classes = len(train_dataset.quality_label_map)
 num_type_classes = len(train_dataset.section_label_map)
@@ -69,7 +70,26 @@ class EstateInsightModel(nn.Module):
         type_output = self.type_head(features)
         return quality_output, type_output
 
-def train(dataloader, model, loss_fn, optimizer, epoch, device):
+class EarlyStop:
+    def __init__(self, patience = 10):
+        self.patience = patience
+        self.best_loss = float('inf')
+        self.counter = 0
+        self.early_stop = False
+        
+    def __call__(self, loss):
+        if loss < self.best_loss:
+            self.best_loss = loss
+            self.counter = 0
+            self.early_stop = False
+            return self.early_stop, True
+        else:
+            self.counter += 1
+            if self.counter > self.patience:
+                self.early_stop = True
+            return self.early_stop, False
+
+def train(dataloader, model, loss_fn, best_loss, optimizer, epoch, early_stop, device, writer):
     print()
 
     print(f"\n--- Training Epoch {epoch+1} ---")
@@ -92,12 +112,30 @@ def train(dataloader, model, loss_fn, optimizer, epoch, device):
         loss.backward()
         optimizer.step()
 
+        writer.add_scalar("Loss/train", loss.item(), batch)
+
+        should_stop, is_improved = early_stop(loss.item())
+
+        if is_improved:
+            best_loss = loss
+            print(f"New best model found! Loss: {loss.item():.6f} Saving...")
+
+            torch.save({
+                'epoch': epoch,
+                'model_state_dict': model.state_dict(),
+                'optimizer_state_dict': optimizer.state_dict(),
+                'loss': loss
+            }, MODEL_PATH)
+
         print(f"Batch {batch}: Loss = {loss.item():>7f} (Quality {loss_quality.item():.6f}, Type {loss_type.item():.6f})")
+
+        if should_stop:
+            return model, early_stop.best_loss, True
     
     print(f"Epoch {epoch+1} completed: {batch+1} batches processed")
-    return model
+    return model, best_loss, False
 
-def evaluate(dataloader, model, loss_fn, device):
+def evaluate(dataloader, model, loss_fn, device, writer):
     print()
     print("--- Eval Model ---")
     test_loss = 0.0
@@ -135,6 +173,7 @@ def evaluate(dataloader, model, loss_fn, device):
             correct_type += int((t_preds == type_label).type(torch.long).sum().item())
             correct_both += int(((q_preds == quality_label) & (t_preds == type_label)).type(torch.long).sum().item())
 
+    writer.add_scalar("Loss/test", test_loss / total)
 
     print("Total Samples: ", total)
     print("Correct Quality Predictions: ", correct_quality)
@@ -153,6 +192,10 @@ def main():
     print("Running on: ", device)
 
     print()
+    print("--- Tensorboard Setup---")
+    writer = SummaryWriter(LOG_DIR)
+
+    print()
     print("--- Instantiate Model ---")
     model = EstateInsightModel(num_quality_classes=3, num_type_classes=5).to(device)
     # model = PreTrainedModel().to(device)
@@ -167,6 +210,8 @@ def main():
     # criterion = nn.BCEWithLogitsLoss()
     criterion = nn.CrossEntropyLoss()
     scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=5, gamma=0.1)
+    early_stop = EarlyStop() # patience = 10
+
     print("--- Load Best Model ---")
     if os.path.exists(MODEL_PATH):
         best_model = torch.load(MODEL_PATH, weights_only=True)
@@ -176,9 +221,15 @@ def main():
         print("Loaded best model from ", MODEL_PATH)
 
     for epoch in range(NUM_EPOCHS):
-        model = train(train_loader, model, criterion, optimizer, epoch, device)
-        test_loss = evaluate(test_loader, model, criterion, device)
-        scheduler.step(test_loss)
+        model, best_loss, should_stop = train(train_loader, model, criterion, best_loss, optimizer, epoch, early_stop, device, writer)
+        test_loss = evaluate(test_loader, model, criterion, device, writer)
+        scheduler.step()
+
+        if should_stop:
+            print(f"Model has stopped training after {epoch+1}")
+            break
+
+    writer.close()
 
 if __name__ == "__main__":
     main()

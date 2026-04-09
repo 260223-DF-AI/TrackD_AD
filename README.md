@@ -11,6 +11,11 @@
     
     uvicorn app.main:app --reload
 
+**Tensorboard:** (Tracking training metrics)
+
+    To view the dashboard, run this in a terminal:
+    tensorboard --logdir=./runs
+
 ## Contributors
 - Alec Figueroa
 - Dio Soetarman
