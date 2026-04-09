@@ -211,3 +211,5 @@ __marimo__/
 # MORE BELOW
 *.json
 /src/data
+*.pth
+/runs
