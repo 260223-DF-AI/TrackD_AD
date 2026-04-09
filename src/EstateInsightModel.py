@@ -70,6 +70,7 @@ class EstateInsightModel(nn.Module):
         type_output = self.type_head(features)
         return quality_output, type_output
 
+    
 class EarlyStop:
     def __init__(self, patience = 10):
         self.patience = patience
@@ -96,6 +97,7 @@ def train(dataloader, model, loss_fn, best_loss, optimizer, epoch, early_stop, d
 
     model.train()
     
+
     for batch, (x, quality_label, type_label) in enumerate(dataloader):
         x, quality_label, type_label = x.to(device), quality_label.to(device), type_label.to(device)
         pred_quality, pred_type = model(x)
@@ -212,6 +214,8 @@ def main():
     scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=5, gamma=0.1)
     early_stop = EarlyStop() # patience = 10
 
+    early_stop = EarlyStop() # patience = 20
+
     print("--- Load Best Model ---")
     if os.path.exists(MODEL_PATH):
         best_model = torch.load(MODEL_PATH, weights_only=True)
@@ -231,5 +235,8 @@ def main():
 
     writer.close()
 
+        if should_stop:
+            print("Model has stopped training early")
+            break
 if __name__ == "__main__":
     main()
