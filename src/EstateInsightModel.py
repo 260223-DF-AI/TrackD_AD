@@ -61,14 +61,34 @@ class EstateInsightModel(nn.Module):
         quality_output = self.quality_head(features)
         type_output = self.type_head(features)
         return quality_output, type_output
+    
+class EarlyStop:
+    def __init__(self, patience = 10):
+        self.patience = patience
+        self.best_loss = float('inf')
+        self.counter = 0
+        self.early_stop = False
+        
+    def __call__(self, loss):
+        if loss < self.best_loss:
+            self.best_loss = loss
+            self.counter = 0
+            self.early_stop = False
+            return self.early_stop, True
+        else:
+            self.counter += 1
+            if self.counter > self.patience:
+                self.early_stop = True
+            return self.early_stop, False
 
-def train(dataloader, model, loss_fn, optimizer, epoch, device):
+def train(dataloader, model, loss_fn, best_loss, optimizer, epoch, early_stop, device):
     print()
 
     print(f"\n--- Training Epoch {epoch+1} ---")
 
     model.train()
     
+
     for batch, (x, quality_label, type_label) in enumerate(dataloader):
         x, quality_label, type_label = x.to(device), quality_label.to(device), type_label.to(device)
         pred_quality, pred_type = model(x)
@@ -80,10 +100,25 @@ def train(dataloader, model, loss_fn, optimizer, epoch, device):
         loss.backward()
         optimizer.step()
 
+        should_stop, is_improved = early_stop(loss.item())
+
+        if is_improved:
+            best_loss = loss
+
+            torch.save({
+                'epoch': epoch,
+                'model_state_dict': model.state_dict(),
+                'optimizer_state_dict': optimizer.state_dict(),
+                'loss': loss
+            }, MODEL_PATH)
+
         print(f"Batch {batch}: Loss = {loss.item():>7f}")
+
+        if should_stop:
+            return model, early_stop.best_loss, True
     
     print(f"Epoch {epoch+1} completed: {batch+1} batches processed")
-    return model
+    return model, best_loss, False
 
 def evaluate(dataloader, model, loss_fn, device):
     print()
@@ -148,6 +183,8 @@ def main():
     )
     criterion = nn.CrossEntropyLoss()
 
+    early_stop = EarlyStop() # patience = 20
+
     print("--- Load Best Model ---")
     if os.path.exists(MODEL_PATH):
         best_model = torch.load(MODEL_PATH, weights_only=True)
@@ -157,8 +194,11 @@ def main():
         print("Loaded best model from ", MODEL_PATH)
 
     for epoch in range(NUM_EPOCHS):
-        model = train(train_loader, model, criterion, optimizer, epoch, device)
+        model, best_loss, should_stop = train(train_loader, model, criterion, best_loss, optimizer, epoch, early_stop, device)
         evaluate(test_loader, model, criterion, device)
 
+        if should_stop:
+            print("Model has stopped training early")
+            break
 if __name__ == "__main__":
     main()
