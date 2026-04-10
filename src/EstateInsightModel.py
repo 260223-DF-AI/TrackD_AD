@@ -101,22 +101,40 @@ def train(dataloader, model, loss_fn, best_loss, optimizer, epoch, early_stop, d
 
     model.train()
     
+    scaler = torch.amp.GradScaler('cuda') if torch.cuda.is_available() else torch.amp.GradScaler('cpu')
+    
+        
 
     for batch, (x, quality_label, type_label) in enumerate(dataloader):
         x, quality_label, type_label = x.to(device), quality_label.to(device), type_label.to(device)
-        pred_quality, pred_type = model(x)
+        
+        # get device type (cuda or cpu)
+        device_type = x.device.type
+        with torch.autocast(device_type=device_type, dtype=torch.float16):
+            pred_quality, pred_type = model(x)
+            
+            # convert integer labels to one-hot for BCEWithLogitsLoss
+            quality_target = nn.functional.one_hot(quality_label, num_classes=model.quality_head.out_features).float()
+            type_target = nn.functional.one_hot(type_label, num_classes=model.type_head.out_features).float()
 
-        # convert integer labels to one-hot for BCEWithLogitsLoss
-        quality_target = nn.functional.one_hot(quality_label, num_classes=model.quality_head.out_features).float()
-        type_target = nn.functional.one_hot(type_label, num_classes=model.type_head.out_features).float()
-
-        loss_quality = loss_fn(pred_quality, quality_target)  # compute loss for room quality
-        loss_type = loss_fn(pred_type, type_target)  # compute loss for room type
-        loss = loss_quality + loss_type
+            loss_quality = loss_fn(pred_quality, quality_target)  # compute loss for room quality
+            loss_type = loss_fn(pred_type, type_target)  # compute loss for room type
+            loss = loss_quality + loss_type
 
         optimizer.zero_grad()
-        loss.backward()
-        optimizer.step()
+        
+        #scaled backward pass
+        scaler.scale(loss).backward()
+        # unscale gradients before clipping
+        scaler.unscale_(optimizer)
+        # clip gradients
+        nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
+        # optimizer step and update
+        scaler.step(optimizer)
+        scaler.update()
+        
+        #loss.backward()
+        #optimizer.step()
 
         writer.add_scalar("Loss/train", loss.item(), batch)
 
