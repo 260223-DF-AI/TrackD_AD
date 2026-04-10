@@ -22,16 +22,20 @@ if not os.path.exists(TRAIN_DIR):
     sys.exit(1)
 
 image_transform = transforms.Compose([
-    transforms.Resize((224, 224)),
-    transforms.RandomHorizontalFlip(0.5),
-    transforms.RandomRotation(15),
+    
+    transforms.Resize(256),
+    transforms.CenterCrop(224),
+    transforms.RandomHorizontalFlip(p=0.5),
+    transforms.RandomRotation(45),
     transforms.ColorJitter(brightness=0.2, contrast=0.2),
-    transforms.ToTensor()])
+    transforms.ToTensor(),
+    transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
+    ])
 
 train_dataset = RealEstateDataset(TRAIN_DIR, transform=image_transform)
 test_dataset = RealEstateDataset(TEST_DIR, transform=image_transform)
 
-train_loader = DataLoader(train_dataset, batch_size=64, shuffle=True)
+train_loader = DataLoader(train_dataset, batch_size=128, shuffle=True)
 test_loader = DataLoader(test_dataset, batch_size=16, shuffle=False)
 
 num_quality_classes = len(train_dataset.quality_label_map)
@@ -103,11 +107,11 @@ def train(dataloader, model, loss_fn, best_loss, optimizer, epoch, early_stop, d
         pred_quality, pred_type = model(x)
 
         # convert integer labels to one-hot for BCEWithLogitsLoss
-        # quality_target = nn.functional.one_hot(quality_label, num_classes=model.quality_head.out_features).float()
-        # type_target = nn.functional.one_hot(type_label, num_classes=model.type_head.out_features).float()
+        quality_target = nn.functional.one_hot(quality_label, num_classes=model.quality_head.out_features).float()
+        type_target = nn.functional.one_hot(type_label, num_classes=model.type_head.out_features).float()
 
-        loss_quality = loss_fn(pred_quality, quality_label)  # compute loss for room quality
-        loss_type = loss_fn(pred_type, type_label)  # compute loss for room type
+        loss_quality = loss_fn(pred_quality, quality_target)  # compute loss for room quality
+        loss_type = loss_fn(pred_type, type_target)  # compute loss for room type
         loss = loss_quality + loss_type
 
         optimizer.zero_grad()
@@ -159,11 +163,11 @@ def evaluate(dataloader, model, loss_fn, device, writer):
             batch_count += 1
 
             # convert to one-hot for BCEWithLogitsLoss
-            # quality_target = nn.functional.one_hot(quality_label, num_classes=model.quality_head.out_features).float()
-            # type_target = nn.functional.one_hot(type_label, num_classes=model.type_head.out_features).float()
+            quality_target = nn.functional.one_hot(quality_label, num_classes=model.quality_head.out_features).float()
+            type_target = nn.functional.one_hot(type_label, num_classes=model.type_head.out_features).float()
 
-            loss_q = loss_fn(pred_quality, quality_label)
-            loss_t = loss_fn(pred_type, type_label)
+            loss_q = loss_fn(pred_quality, quality_target)
+            loss_t = loss_fn(pred_type, type_target)
             test_loss += (loss_q + loss_t)
             print("Batch {}: Loss = {:.6f} (Quality {:.6f}, Type {:.6f})".format(batch, loss_q + loss_t, loss_q, loss_t))
 
@@ -204,17 +208,17 @@ def main():
     best_loss = float('inf')
     
 
-    NUM_EPOCHS = 20
+    NUM_EPOCHS = 50
     optimizer = optim.Adam(
         filter(lambda p: p.requires_grad, model.parameters()), 
-        lr=0.001
+        lr=0.002
     )
-    # criterion = nn.BCEWithLogitsLoss()
-    criterion = nn.CrossEntropyLoss()
+    criterion = nn.BCEWithLogitsLoss()
+    #criterion = nn.CrossEntropyLoss()
     scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=5, gamma=0.1)
     early_stop = EarlyStop() # patience = 10
 
-    early_stop = EarlyStop() # patience = 20
+    early_stop = EarlyStop(150) # patience = 20 by default
 
     print("--- Load Best Model ---")
     if os.path.exists(MODEL_PATH):
@@ -230,13 +234,10 @@ def main():
         scheduler.step()
 
         if should_stop:
-            print(f"Model has stopped training after {epoch+1}")
+            print(f"Model has stopped training after {epoch+1} epochs")
             break
 
     writer.close()
 
-        if should_stop:
-            print("Model has stopped training early")
-            break
 if __name__ == "__main__":
     main()
