@@ -40,6 +40,9 @@ class RealEstateDataset(Dataset):
 #import this transform where the dataset is used, so we can reuse it in the model training code as well
 image_transform = transforms.Compose([
     transforms.Resize((224, 224)),
+    transforms.RandomHorizontalFlip(p=0.3),
+    transforms.RandomVerticalFlip(p=0.3),
+    transforms.RandomRotation(45),
     transforms.ToTensor()])
 
 if __name__ == "__main__":
