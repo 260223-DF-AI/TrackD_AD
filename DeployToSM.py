@@ -25,7 +25,7 @@ print(f"training on {TRAIN_DEVICE}")
 print(f"deploying on {DEPLOY_DEVICE}")
 
 
-main()
+#main()
 
 code_dir = os.path.join(LOCAL_MODEL_DIR, 'code')
 if os.path.exists('src/inference.py'):
@@ -46,6 +46,7 @@ print(f"Saved model to {TAR_NAME}")
 iam_client = boto3.client('iam')
 role_response = iam_client.get_role(RoleName='AmazonSageMaker-ExecutionRole-20260409T093822')
 ARN = role_response['Role']['Arn']
+
 
 try:
   session = sagemaker.Session()

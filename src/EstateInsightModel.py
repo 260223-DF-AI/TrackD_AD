@@ -104,8 +104,6 @@ def train(dataloader, model, loss_fn, best_loss, optimizer, epoch, early_stop, d
     model.train()
     
     scaler = torch.amp.GradScaler('cuda') if torch.cuda.is_available() else torch.amp.GradScaler('cpu')
-    
-        
 
     for batch, (x, quality_label, type_label) in enumerate(dataloader):
         x, quality_label, type_label = x.to(device), quality_label.to(device), type_label.to(device)

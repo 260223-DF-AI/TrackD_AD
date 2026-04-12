@@ -16,7 +16,7 @@ class RealEstateDataset(Dataset):
 
         quality_label_names = sorted(list(set(p.parent.parent.name for p in self.image_paths)))
         house_section_label_names = sorted(list(set(p.parent.name for p in self.image_paths)))
-
+        
         self.quality_label_map = {name: idx for idx, name in enumerate(quality_label_names)}
         self.section_label_map = {name: idx for idx, name in enumerate(house_section_label_names)}
 
