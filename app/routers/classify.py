@@ -19,8 +19,6 @@ fomatter = logging.Formatter('%(asctime)s | %(levelname)s | %(message)s')
 logger.setLevel(logging.INFO)
 
 router = APIRouter()
-sagemaker_runtime = boto3.client("sagemaker-runtime", region_name="us-east-1")
-ENDPOINT_NAME = get_endpoint()
 
 @router.post(
         "/analyze",
@@ -34,10 +32,14 @@ ENDPOINT_NAME = get_endpoint()
 def classify_room(image: UploadFile):
     """Send post request to classify an image"""
     # Validate content type
+    print("Validating content type...")
     if image.content_type not in ["image/jpeg"]:
         raise HTTPException(status_code=400, detail="Invalid file type. Only JPEG and PNG are allowed.")
 
     # Run the classification
+    print("Invoking SageMaker endpoint for prediction...")
+    sagemaker_runtime = boto3.client("sagemaker-runtime", region_name="us-east-1")
+    ENDPOINT_NAME = get_endpoint()
     payload = create_image_payload(image.file)
     response = sagemaker_runtime.invoke_endpoint(EndpointName=ENDPOINT_NAME, ContentType="application/x-image", Body=payload)
 
