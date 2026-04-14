@@ -5,10 +5,12 @@ import torch.nn as nn
 import os
 import sys
 import logging
+import shutil
+from dotenv import load_dotenv
 from torch.utils.data import DataLoader, Dataset
 from torch.utils.tensorboard import SummaryWriter
 from torchvision import transforms, datasets
-from data_loader import RealEstateDataset
+from .data_loader import RealEstateDataset
 from torchmetrics import Accuracy, Precision, Recall, F1Score
 
 # Set up logging
@@ -45,6 +47,7 @@ if not os.path.exists(TRAIN_DIR):
     sys.exit(1)
 
 image_transform = transforms.Compose([
+    
     transforms.Resize(256),
     transforms.CenterCrop(224),
     transforms.RandomHorizontalFlip(p=0.5),
@@ -57,8 +60,8 @@ image_transform = transforms.Compose([
 train_dataset = RealEstateDataset(TRAIN_DIR, transform=image_transform)
 test_dataset = RealEstateDataset(TEST_DIR, transform=image_transform)
 
-train_loader = DataLoader(train_dataset, batch_size=64, shuffle=True)
-test_loader = DataLoader(test_dataset, batch_size=16, shuffle=False)
+train_loader = DataLoader(train_dataset, batch_size=15, shuffle=True)
+test_loader = DataLoader(test_dataset, batch_size=15, shuffle=False)
 
 num_quality_classes = len(train_dataset.quality_label_map)
 num_type_classes = len(train_dataset.section_label_map)
@@ -76,7 +79,7 @@ class EstateInsightModel(nn.Module):
     def __init__(self, num_quality_classes, num_type_classes):
         super(EstateInsightModel, self).__init__()
         # Load a pre-trained ResNet model
-        self.model = models.resnet18(weights=models.ResNet18_Weights.DEFAULT)
+        self.model = models.resnet50(weights=models.ResNet50_Weights.DEFAULT)
         # Replace the final fully connected layer to match the number of classes
         in_features = self.model.fc.in_features
 
@@ -86,13 +89,13 @@ class EstateInsightModel(nn.Module):
 
         # remove original fully connected layer
         self.model.fc = nn.Identity()
-
+        
         # Two separate outputs for the quality and type classifications
         self.quality_head = nn.Linear(in_features, num_quality_classes)
         self.type_head = nn.Linear(in_features, num_type_classes)
         
         for name, param in self.model.named_parameters():
-            if "layer4" in name or "fc" in name or "layer3" in name:
+            if "layer4" in name or "fc" in name or 'layer3' in name:
                 param.requires_grad = True
 
     def forward(self, x):
@@ -139,7 +142,7 @@ class EstateInsightModel(nn.Module):
 
     
 class EarlyStop:
-    def __init__(self, patience = 10):
+    def __init__(self, patience = 20):
         self.patience = patience
         self.best_loss = float('inf')
         self.counter = 0
@@ -165,19 +168,38 @@ def train(dataloader, model, loss_fn, best_loss, optimizer, epoch, early_stop, d
     model.train()
     total_loss = 0
     batch_count = 0
+    scaler = torch.amp.GradScaler('cuda') if torch.cuda.is_available() else torch.amp.GradScaler('cpu')
 
     for batch, (x, quality_label, type_label) in enumerate(dataloader):
         x, quality_label, type_label = x.to(device), quality_label.to(device), type_label.to(device)
-        pred_quality, pred_type = model(x)
+        
+        # get device type (cuda or cpu)
+        device_type = x.device.type
+        with torch.autocast(device_type=device_type, dtype=torch.float16):
+            pred_quality, pred_type = model(x)
+            
+            # convert integer labels to one-hot for BCEWithLogitsLoss
+            #quality_target = nn.functional.one_hot(quality_label, num_classes=model.quality_head.out_features).float()
+            #type_target = nn.functional.one_hot(type_label, num_classes=model.type_head.out_features).float()
 
-        # compute loss for room quality and type
-        loss_quality = loss_fn(pred_quality, quality_label)
-        loss_type = loss_fn(pred_type, type_label)
-        loss = loss_quality + loss_type
+            loss_quality = loss_fn(pred_quality, quality_label)  # compute loss for room quality
+            loss_type = loss_fn(pred_type, type_label)  # compute loss for room type
+            loss = loss_quality + loss_type
 
         optimizer.zero_grad()
-        loss.backward()
-        optimizer.step()
+        
+        #scaled backward pass
+        scaler.scale(loss).backward()
+        # unscale gradients before clipping
+        scaler.unscale_(optimizer)
+        # clip gradients
+        nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
+        # optimizer step and update
+        scaler.step(optimizer)
+        scaler.update()
+        
+        #loss.backward()
+        #optimizer.step()
 
         writer.add_scalar("Loss/train", loss.item(), batch)
         total_loss += loss.item()
@@ -190,11 +212,14 @@ def train(dataloader, model, loss_fn, best_loss, optimizer, epoch, early_stop, d
             print(f"New best model found! Loss: {loss.item():.6f} Saving...")
             logger.info(f"Epoch {epoch+1}: New best model found with loss {loss.item():.6f}")
 
+            print(f"Better loss value found, saving model with loss: {loss.item()}")
             torch.save({
                 'epoch': epoch,
                 'model_state_dict': model.state_dict(),
                 'optimizer_state_dict': optimizer.state_dict(),
-                'loss': loss
+                'loss': loss,
+                'quality_label_names': train_dataset.quality_label_names,
+                'house_section_label_names': train_dataset.house_section_label_names
             }, MODEL_PATH)
 
         print(f"Batch {batch}: Loss = {loss.item():>7f} (Quality {loss_quality.item():.6f}, Type {loss_type.item():.6f})")
@@ -263,6 +288,10 @@ def evaluate(dataloader, model, loss_fn, device, writer):
             batch_size = quality_label.size(0)
             total += batch_size
             batch_count += 1
+
+            # convert to one-hot for BCEWithLogitsLoss
+            #quality_target = nn.functional.one_hot(quality_label, num_classes=model.quality_head.out_features).float()
+           # type_target = nn.functional.one_hot(type_label, num_classes=model.type_head.out_features).float()
 
             # Update torchmetrics
             quality_accuracy.update(q_preds, quality_label)
@@ -401,7 +430,10 @@ def evaluate(dataloader, model, loss_fn, device, writer):
     return test_loss / batch_count
 
 
-def main():
+def main(args):
+
+     # sagemaker expects the model to be at SM_MODEL_DIR
+    SM_MODEL_PATH = os.path.join(args.model_dir, 'estate_insight.pth')
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print("Running on: ", device)
     logger.info(f"Training started on device: {device}")
@@ -420,18 +452,19 @@ def main():
     NUM_EPOCHS = 20
     optimizer = optim.Adam(
         filter(lambda p: p.requires_grad, model.parameters()), 
-        lr=0.001
+        lr=0.0015
     )
-    # criterion = nn.BCEWithLogitsLoss()
+    #criterion = nn.BCEWithLogitsLoss()
     criterion = nn.CrossEntropyLoss()
     scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=5, gamma=0.1)
-    early_stop = EarlyStop() # patience = 10
 
+    early_stop = EarlyStop(80) # patience = 20 by default
 
     print("--- Load Best Model ---")
     if os.path.exists(MODEL_PATH):
-        best_model = torch.load(MODEL_PATH, weights_only=True)
+        best_model = torch.load(MODEL_PATH, weights_only=True, map_location=device)
         model.load_state_dict(best_model['model_state_dict'])
+        model.to(device)
         optimizer.load_state_dict(best_model['optimizer_state_dict'])
         best_loss = best_model['loss']
         print("Loaded best model from ", MODEL_PATH)
@@ -441,16 +474,22 @@ def main():
 
     logger.info(f"Starting training for {NUM_EPOCHS} epochs")
 
-    for epoch in range(NUM_EPOCHS):
+    for epoch in range(args.epochs):
         model, best_loss, should_stop = train(train_loader, model, criterion, best_loss, optimizer, epoch, early_stop, device, writer)
         test_loss = evaluate(test_loader, model, criterion, device, writer)
         scheduler.step()
 
         if should_stop:
-            print(f"Model has stopped training after {epoch+1}")
+            print(f"Model has stopped training after {epoch+1} epochs")
             logger.info(f"Training stopped early after {epoch+1} epochs due to early stopping")
             break
-
+    
+    code_dir = os.path.join(args.model_dir, 'code')
+    os.makedirs(code_dir, exist_ok=True)
+    
+    if os.path.exists('inference.py'):
+        shutil.copy('inference.py', os.path.join(code_dir, 'inference.py'))
+        
     writer.close()
     logger.info("Training completed successfully")
 

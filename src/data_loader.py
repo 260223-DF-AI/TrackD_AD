@@ -14,11 +14,11 @@ class RealEstateDataset(Dataset):
         self.transform = transform
         self.image_paths = list(self.root_path.rglob("*.jpg"))
 
-        quality_label_names = sorted(list(set(p.parent.parent.name for p in self.image_paths)))
-        house_section_label_names = sorted(list(set(p.parent.name for p in self.image_paths)))
-
-        self.quality_label_map = {name: idx for idx, name in enumerate(quality_label_names)}
-        self.section_label_map = {name: idx for idx, name in enumerate(house_section_label_names)}
+        self.quality_label_names = sorted(list(set(p.parent.parent.name for p in self.image_paths)))
+        self.house_section_label_names = sorted(list(set(p.parent.name for p in self.image_paths)))
+        
+        self.quality_label_map = {name: idx for idx, name in enumerate(self.quality_label_names)}
+        self.section_label_map = {name: idx for idx, name in enumerate(self.house_section_label_names)}
 
     def __len__(self):
         return len(self.image_paths)
