@@ -6,6 +6,9 @@ Accepts an image upload and returns the predicted room type with confidence scor
 from fastapi import APIRouter, File, UploadFile, HTTPException, Depends
 from app.schemas import ClassifyResponse
 import logging
+import boto3
+import json
+from DeployedModel import get_endpoint, create_image_payload
 
 # implementing logger functionality
 logger = logging.getLogger(__name__)
@@ -16,6 +19,8 @@ fomatter = logging.Formatter('%(asctime)s | %(levelname)s | %(message)s')
 logger.setLevel(logging.INFO)
 
 router = APIRouter()
+sagemaker_runtime = boto3.client("sagemaker-runtime", region_name="us-east-1")
+ENDPOINT_NAME = get_endpoint()
 
 @router.post(
         "/analyze",
@@ -26,16 +31,15 @@ router = APIRouter()
         "and return confidence scores for all supported classes."
         ),
     )
-def classify_room() -> ClassifyResponse:
+def classify_room(image: UploadFile):
     """Send post request to classify an image"""
     # Validate content type
-
-
-    # Read and validate file size
-
+    if image.content_type not in ["image/jpeg"]:
+        raise HTTPException(status_code=400, detail="Invalid file type. Only JPEG and PNG are allowed.")
 
     # Run the classification
-
+    payload = create_image_payload(image.file)
+    response = sagemaker_runtime.invoke_endpoint(EndpointName=ENDPOINT_NAME, ContentType="application/x-image", Body=payload)
 
     # Return response
-    return ClassifyResponse()
+    return response["Body"].read()
