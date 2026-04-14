@@ -2,12 +2,10 @@ import sagemaker
 import torch
 import torch.nn as nn
 import torch.optim as optim
-from src.EstateInsightModel import train_dataset
 from sagemaker.pytorch import PyTorch, PyTorchModel
 from sagemaker.serializers import JSONSerializer, DataSerializer
 from sagemaker.deserializers import JSONDeserializer
-from src.EstateInsightModel import EstateInsightModel, EarlyStop, main, LOG_DIR, MODEL_PATH
-from src.EstateInsightModel import train
+from src.EstateInsightModel import main, LOG_DIR, MODEL_PATH
 from torch.utils.tensorboard import SummaryWriter
 from PIL import Image
 import shutil
@@ -31,8 +29,10 @@ load_dotenv()
 
 # add a way to accept hyperparameters to arguments
 parser = argparse.ArgumentParser()
+
 # sagemaker specific args
 parser.add_argument('--model_dir', type=str, default=os.environ.get('SM_MODEL_DIR', './model'))
+
 # define the hyperparameters
 parser.add_argument('--epochs', type=int, default=NUM_EPOCHS)
 parser.add_argument('--learning_rate', type=float, default=0.001)
@@ -106,13 +106,15 @@ predictor = pytorch_model.deploy(
 )
 
 # Find a test image and send it to same directory as this script, name it 'img.jpg'
-img_pth = 'img.jpg'
-image = Image.open(img_pth).convert('RGB')
-# can't send PIL images to our model in the cloud, must send bytes instead
-buffer = io.BytesIO()
-# You must specify a format (e.g., JPEG or PNG) to compress the object into bytes
-image.save(buffer, format="JPEG") 
-payload = buffer.getvalue()
-response = predictor.predict(payload)
-train_dataset.quality_label_map
-print(response)
+# img_pth = 'img.jpg'
+# image = Image.open(img_pth).convert('RGB')
+# # can't send PIL images to our model in the cloud, must send bytes instead
+# buffer = io.BytesIO()
+# # You must specify a format (e.g., JPEG or PNG) to compress the object into bytes
+# image.save(buffer, format="JPEG") 
+# payload = buffer.getvalue()
+# response = predictor.predict(payload)
+# train_dataset.quality_label_map
+# print()
+# print(response)
+# print(f"Endpoint: {predictor.endpoint_name}")

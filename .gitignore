@@ -215,3 +215,5 @@ __marimo__/
 /runs
 data*.rar
 data/
+*.tar.gz
+model/
