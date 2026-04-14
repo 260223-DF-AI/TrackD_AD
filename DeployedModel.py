@@ -9,6 +9,7 @@ from sagemaker.serializers import DataSerializer
 
 
 def sagemaker_prediction(input_data, endpoint_name):
+  print("Getting prediction...")
   predictor = Predictor(endpoint_name,
             serializer=DataSerializer(content_type="image/jpeg"),
             deserializer=JSONDeserializer()
@@ -18,6 +19,7 @@ def sagemaker_prediction(input_data, endpoint_name):
   print(response)
 
 def get_endpoint():
+  print("Finding endpoint...")
   sagemaker_client = boto3.client('sagemaker')
   
   response = sagemaker_client.list_endpoints(
@@ -39,6 +41,8 @@ def create_image_payload(img_pth : str):
   Returns:
       BytesIO: from the io module
   """
+  
+  print("Converting Image to Bytes for JSON payload...")
   image = Image.open(img_pth).convert('RGB')
   buffer = io.BytesIO()
   # You must specify a format (e.g., JPEG or PNG) to compress the object into bytes
