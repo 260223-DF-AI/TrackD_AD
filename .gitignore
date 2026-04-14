@@ -213,3 +213,7 @@ __marimo__/
 /src/data
 *.pth
 /runs
+data*.rar
+data/
+*.tar.gz
+model/
