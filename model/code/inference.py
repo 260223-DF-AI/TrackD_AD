@@ -51,29 +51,28 @@ def model_fn(model_dir):
     checkpoint = torch.load(model_path, map_location=device)
     print("---4. Checkpoint Loaded---")
    # 3. Pull the specific state_dict key you used during save
-    state_dict = checkpoint.get('model_state_dict', checkpoint)
+    # state_dict = checkpoint.get('model_state_dict', checkpoint)
 
     # 4. Clean 'module.' prefixes if you trained with DataParallel
-    new_state_dict = OrderedDict()
-    for k, v in state_dict.items():
-        name = k[7:] if k.startswith('module.') else k
-        new_state_dict[name] = v
+    # new_state_dict = OrderedDict()
+    # for k, v in state_dict.items():
+    #     name = k[7:] if k.startswith('module.') else k
+    #     new_state_dict[name] = v
+    
+    # Load the weights
+    model.load_state_dict(checkpoint['model_state_dict'])
+    
+    # Attach the labels to the model object so predict_fn can see them
+    model.quality_label_names = checkpoint['quality_label_names']
+    model.house_section_label_names = checkpoint['house_section_label_names']
 
     # 5. Load with strict=False to ignore minor version/metadata differences
-    model.load_state_dict(new_state_dict, strict=False)
+    #model.load_state_dict(new_state_dict, strict=False)
     
     model.to(device)
     model.eval()
     return model
     
-  #   if 'model_state_dict' in checkpoint:
-  #       model.load_state_dict(checkpoint['model_state_dict'])
-  #   else:
-  #     model.load_state_dict(checkpoint)
-      
-  #   model.to(device)
-  #   model.eval()
-  #   return model
   except Exception as e:
     print(f"FAILED TO LOAD MODEL {str(e)}") 
     raise e
@@ -106,13 +105,27 @@ def predict_fn(input_data, model):
     
     model.eval()
     with torch.no_grad():
-      prediction1, prediction2 = model(input_data)
-    result1 = [float(x) for x in prediction1.cpu().numpy().flatten()]
-    result2 = [float(x) for x in prediction2.cpu().numpy().flatten()]
+      quality_pred, section_pred = model(input_data.to(device))
+
+      quality_probability = torch.softmax(quality_pred, dim=1).cpu().numpy().flatten()
+      section_probability = torch.softmax(section_pred, dim=1).cpu().numpy().flatten()
+    result1 = [float(x) for x in quality_pred.cpu().numpy().flatten()]
+    result2 = [float(x) for x in section_pred.cpu().numpy().flatten()]
     #return {"test": [1.0, 2.0], "status": "ok"}
-    print(f"quality: {result1}, type: {result2}")
-    return {"Quality" : result1, "Type": result2}
-  
+    # print(f"quality: {result1}, type: {result2}")
+    # return {"Quality" : result1, "Type": result2}
+    return {
+        "all_quality_scores": {
+            label: float(prob) for label, prob in zip(model.quality_label_names, quality_probability)
+        },
+        "all_section_scores": {
+            label: float(prob) for label, prob in zip(model.house_section_label_names, section_probability)
+        },
+        "prediction": {
+            "quality": str(model.quality_label_names[quality_probability.argmax()]),
+            "section": str(model.house_section_label_names[section_probability.argmax()])
+        }
+    }
   except Exception as e:
     print(f"Exception occured: {e}")
     raise e

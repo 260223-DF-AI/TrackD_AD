@@ -4,8 +4,8 @@ import torch.optim as optim
 import torch.nn as nn
 import os
 import sys
-import argparse
 import shutil
+from dotenv import load_dotenv
 from torch.utils.data import DataLoader, Dataset
 from torch.utils.tensorboard import SummaryWriter
 from torchvision import transforms, datasets
@@ -37,7 +37,7 @@ image_transform = transforms.Compose([
 train_dataset = RealEstateDataset(TRAIN_DIR, transform=image_transform)
 test_dataset = RealEstateDataset(TEST_DIR, transform=image_transform)
 
-train_loader = DataLoader(train_dataset, batch_size=15, shuffle=True)
+train_loader = DataLoader(train_dataset, batch_size=128, shuffle=True)
 test_loader = DataLoader(test_dataset, batch_size=15, shuffle=False)
 
 num_quality_classes = len(train_dataset.quality_label_map)
@@ -149,7 +149,9 @@ def train(dataloader, model, loss_fn, best_loss, optimizer, epoch, early_stop, d
                 'epoch': epoch,
                 'model_state_dict': model.state_dict(),
                 'optimizer_state_dict': optimizer.state_dict(),
-                'loss': loss
+                'loss': loss,
+                'quality_label_names': train_dataset.quality_label_names,
+                'house_section_label_names': train_dataset.house_section_label_names
             }, MODEL_PATH)
 
         print(f"Batch {batch}: Loss = {loss.item():>7f} (Quality {loss_quality.item():.6f}, Type {loss_type.item():.6f})")
@@ -212,19 +214,8 @@ def evaluate(dataloader, model, loss_fn, device, writer):
     return test_loss / batch_count
 
 
-def main():
-    
-    # add a way to accept hyperparameters to arguments
-    parser = argparse.ArgumentParser()
-    
-    # define the hyperparameters
-    parser.add_argument('--epochs', type=int, default=1)
-    parser.add_argument('--learning_rate', type=float, default=0.001)
-    
-    # sagemaker specific args
-    parser.add_argument('--model_dir', type=str, default=os.environ.get('SM_MODEL_DIR', './model'))
-    args, _ = parser.parse_known_args()
-    
+def main(args):
+
      # sagemaker expects the model to be at SM_MODEL_DIR
     SM_MODEL_PATH = os.path.join(args.model_dir, 'estate_insight.pth')
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")

@@ -2,6 +2,7 @@ import sagemaker
 import torch
 import torch.nn as nn
 import torch.optim as optim
+from src.EstateInsightModel import train_dataset
 from sagemaker.pytorch import PyTorch, PyTorchModel
 from sagemaker.serializers import JSONSerializer, DataSerializer
 from sagemaker.deserializers import JSONDeserializer
@@ -14,18 +15,30 @@ import os
 import tarfile
 import boto3
 import io
+from dotenv import load_dotenv
+import argparse
 
 USE_GPU = True
 TRAIN_DEVICE = 'ml.g4dn.xlarge' if USE_GPU else 'ml.m5.large'
 DEPLOY_DEVICE = 'ml.m5.large'
 LOCAL_MODEL_DIR = 'model'
 TAR_NAME = 'model.tar.gz'
-NUM_EPOCHS = 1
+NUM_EPOCHS = 2
 print(f"training on {TRAIN_DEVICE}")
 print(f"deploying on {DEPLOY_DEVICE}")
 
+load_dotenv()
 
-#main()
+# add a way to accept hyperparameters to arguments
+parser = argparse.ArgumentParser()
+# sagemaker specific args
+parser.add_argument('--model_dir', type=str, default=os.environ.get('SM_MODEL_DIR', './model'))
+# define the hyperparameters
+parser.add_argument('--epochs', type=int, default=NUM_EPOCHS)
+parser.add_argument('--learning_rate', type=float, default=0.001)
+args, _ = parser.parse_known_args()
+
+#main(args)
 
 code_dir = os.path.join(LOCAL_MODEL_DIR, 'code')
 if os.path.exists('src/inference.py'):
@@ -43,13 +56,16 @@ with tarfile.open(TAR_NAME, 'w:gz') as tar:
   
 print(f"Saved model to {TAR_NAME}")
 
-iam_client = boto3.client('iam')
-role_response = iam_client.get_role(RoleName='AmazonSageMaker-ExecutionRole-20260409T093822')
-ARN = role_response['Role']['Arn']
+# iam_client = boto3.client('iam')
+# role_response = iam_client.get_role(RoleName='AmazonSageMaker-ExecutionRole-20260409T093822')
+# ARN = role_response['Role']['Arn']
 
-
+#session = sagemaker.Session(boto3.Session(region_name='us-east-1'))
+ARN = os.getenv('ARN')
+REGION = os.getenv('AWS_REGION')
+os.environ["AWS_DEFAULT_REGION"] = 'us-east-1'
 try:
-  session = sagemaker.Session()
+  session = sagemaker.Session(boto3.Session(region_name='us-east-1'))
   try:
     role = sagemaker.get_execution_role()
   except (ValueError, RuntimeError):
@@ -98,4 +114,5 @@ buffer = io.BytesIO()
 image.save(buffer, format="JPEG") 
 payload = buffer.getvalue()
 response = predictor.predict(payload)
+train_dataset.quality_label_map
 print(response)
