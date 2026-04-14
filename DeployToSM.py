@@ -38,9 +38,11 @@ parser.add_argument('--epochs', type=int, default=NUM_EPOCHS)
 parser.add_argument('--learning_rate', type=float, default=0.001)
 args, _ = parser.parse_known_args()
 
-#main(args)
+main(args)
 
 code_dir = os.path.join(LOCAL_MODEL_DIR, 'code')
+os.makedirs(code_dir, exist_ok=True)
+
 if os.path.exists('src/inference.py'):
     shutil.copy('src/inference.py', os.path.join(code_dir, 'inference.py'))
     #shutil.copy('requirements.txt', os.path.join(code_dir, 'requirements.txt'))

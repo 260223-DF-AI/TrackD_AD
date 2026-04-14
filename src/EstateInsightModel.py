@@ -37,7 +37,7 @@ image_transform = transforms.Compose([
 train_dataset = RealEstateDataset(TRAIN_DIR, transform=image_transform)
 test_dataset = RealEstateDataset(TEST_DIR, transform=image_transform)
 
-train_loader = DataLoader(train_dataset, batch_size=128, shuffle=True)
+train_loader = DataLoader(train_dataset, batch_size=15, shuffle=True)
 test_loader = DataLoader(test_dataset, batch_size=15, shuffle=False)
 
 num_quality_classes = len(train_dataset.quality_label_map)
