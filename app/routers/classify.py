@@ -22,7 +22,6 @@ router = APIRouter()
 
 @router.post(
         "/analyze",
-        response_model=ClassifyResponse,
         summary="Classify a room image",
         description=(
         "Upload an image of a home room. The vision model will predict the room type "
@@ -40,8 +39,12 @@ def classify_room(image: UploadFile):
     print("Invoking SageMaker endpoint for prediction...")
     sagemaker_runtime = boto3.client("sagemaker-runtime", region_name="us-east-1")
     ENDPOINT_NAME = get_endpoint()
-    payload = create_image_payload(image.file)
-    response = sagemaker_runtime.invoke_endpoint(EndpointName=ENDPOINT_NAME, ContentType="application/x-image", Body=payload)
+    # payload = create_image_payload(image.file)
+    response = sagemaker_runtime.invoke_endpoint(
+        EndpointName=ENDPOINT_NAME,
+        ContentType=image.content_type,
+        Body=image.file.read()
+    )
 
     # Return response
     return response["Body"].read()
