@@ -17,6 +17,7 @@ def sagemaker_prediction(input_data, endpoint_name):
   
   response = predictor.predict(input_data)
   print(response)
+  return response
 
 def get_endpoint():
   print("Finding endpoint...")

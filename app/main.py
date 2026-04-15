@@ -6,6 +6,7 @@ import time
 import logging
 
 from app.routers import classify
+from app.routers import bedrock
 
 # implementing logger functionality
 logger = logging.getLogger(__name__)
@@ -27,3 +28,4 @@ def get_root():
 
 # Routers
 app.include_router(classify.router)
+app.include_router(bedrock.router, prefix="/bedrock", tags=["bedrock"])
