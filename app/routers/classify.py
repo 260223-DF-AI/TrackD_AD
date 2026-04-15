@@ -4,7 +4,6 @@ Accepts an image upload and returns the predicted room type with confidence scor
 """
 
 from fastapi import APIRouter, File, UploadFile, HTTPException, Depends
-from app.schemas import ClassifyResponse
 import logging
 import boto3
 import json

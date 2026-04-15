@@ -1,5 +1,4 @@
 from fastapi import APIRouter, File, UploadFile, HTTPException, Depends
-from app.schemas import ClassifyResponse
 #from openai import OpenAI
 from dotenv import load_dotenv
 from pydantic import BaseModel
