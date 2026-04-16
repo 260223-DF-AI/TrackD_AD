@@ -21,7 +21,7 @@ TRAIN_DEVICE = 'ml.g4dn.xlarge' if USE_GPU else 'ml.m5.large'
 DEPLOY_DEVICE = 'ml.m5.large'
 LOCAL_MODEL_DIR = 'model'
 TAR_NAME = 'model.tar.gz'
-NUM_EPOCHS = 2
+NUM_EPOCHS = 10
 print(f"training on {TRAIN_DEVICE}")
 print(f"deploying on {DEPLOY_DEVICE}")
 
@@ -98,6 +98,15 @@ pytorch_model = PyTorchModel(
         'MODEL_SERVER_TIMEOUT': '300',
         'SAGEMAKER_MODEL_SERVER_WORKERS': '1'
     }
+)
+
+model_package = pytorch_model.register(
+  model_package_group_name='EstateInsight',
+  content_types=['image/jpeg'],
+  response_types=['application/json'],
+  inference_instances=['ml.m5.large'],
+  transform_instances=['ml.m5.large'],
+  approval_status='PendingManualApproval'
 )
 
 predictor = pytorch_model.deploy(
