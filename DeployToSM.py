@@ -21,7 +21,7 @@ TRAIN_DEVICE = 'ml.g4dn.xlarge' if USE_GPU else 'ml.m5.large'
 DEPLOY_DEVICE = 'ml.m5.large'
 LOCAL_MODEL_DIR = 'model'
 TAR_NAME = 'model.tar.gz'
-NUM_EPOCHS = 2
+NUM_EPOCHS = 10
 print(f"training on {TRAIN_DEVICE}")
 print(f"deploying on {DEPLOY_DEVICE}")
 
@@ -106,8 +106,8 @@ model_package = pytorch_model.register(
   response_types=['application/json'],
   inference_instances=['ml.m5.large'],
   transform_instances=['ml.m5.large'],
-  approval_status='PendingManualApproval',
-  description='Pytorch model using ResNet50 for real estate image analysis'
+  approval_status='PendingManualApproval'
+  description='Model for analyzing real estate images'
 )
 
 predictor = pytorch_model.deploy(
