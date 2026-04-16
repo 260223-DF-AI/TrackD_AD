@@ -1,4 +1,4 @@
-# run this with: python -m streamlit run
+# run this with: streamlit run streamlit-app/streamlit_app.py
 import streamlit as st
 from app_functionality import LLM_analysis, LLM_analysis_TOT, prediction
 st.title("Estate Insight")
