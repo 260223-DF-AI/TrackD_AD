@@ -106,7 +106,7 @@ model_package = pytorch_model.register(
   response_types=['application/json'],
   inference_instances=['ml.m5.large'],
   transform_instances=['ml.m5.large'],
-  approval_status='PendingManualApproval'
+  approval_status='PendingManualApproval',
   description='Model for analyzing real estate images'
 )
 
