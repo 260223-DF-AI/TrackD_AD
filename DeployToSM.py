@@ -38,7 +38,7 @@ parser.add_argument('--epochs', type=int, default=NUM_EPOCHS)
 parser.add_argument('--learning_rate', type=float, default=0.001)
 args, _ = parser.parse_known_args()
 
-main(args)
+#main(args)
 
 code_dir = os.path.join(LOCAL_MODEL_DIR, 'code')
 os.makedirs(code_dir, exist_ok=True)
@@ -98,6 +98,16 @@ pytorch_model = PyTorchModel(
         'MODEL_SERVER_TIMEOUT': '300',
         'SAGEMAKER_MODEL_SERVER_WORKERS': '1'
     }
+)
+
+model_package = pytorch_model.register(
+  model_package_group_name='EstateInsight',
+  content_types=['image/jpeg'],
+  response_types=['application/json'],
+  inference_instances=['ml.m5.large'],
+  transform_instances=['ml.m5.large'],
+  approval_status='PendingManualApproval',
+  description='Pytorch model using ResNet50 for real estate image analysis'
 )
 
 predictor = pytorch_model.deploy(
