@@ -16,6 +16,10 @@
     To view the dashboard, run this in a terminal:
     tensorboard --logdir=./runs
 
+**Streamlit:** (Interactive App)
+
+    streamlit run streamlit-app/streamlit_app.py
+
 ## Contributors
 - Alec Figueroa
 - Dio Soetarman
