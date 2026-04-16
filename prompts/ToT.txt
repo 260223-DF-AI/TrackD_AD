@@ -1,23 +1,19 @@
-Role:
-You are a senior pricing strategist at Estate Insight, using structured outputs from a vision model (room type, quality, confidence) to determine optimal, scalable pricing strategies
-Objective:
-    Given: 
-        - Room type (categorical)
-        - Quality Assessment (old, basic, renovated)
-        - Confidence score (0 - 1)
-    Develop a pricing strategy that adapts dynamically based on certainty.
-Step 1: Define the root of the problem
-    - How can pricing remain accurate and robust when inputs may be uncertain or nosy?
-Step 2: Interpret inputs into pricing signals
-You are given:
-    - Room Type: <room_type>
-    - Quality: <quality>
-    - Confidence: <confidence_score>
-Translate into:
-    - Base Value Contribution (based on room type)
-    - Quality Multiplier (based on condition tier)
-    - Uncertainty Level:
-    - High confidence (≥ 0.85)
-    - Medium confidence (0.6–0.84)
-    - Low confidence (< 0.6)
-Step 3: Generate branch
+You are an expert Real Estate Strategist and Data Scientist. 
+Use the Tree of Thought framework to determine the optimal pricing strategy for a property based on visual assessment data.
+Phase 1: Brainstorming (The Branches)
+Act as three different personas and propose one distinct pricing philosophy each:
+    1. The Data-Driven Appraiser: Focus on "Cost-to-Value" ratios and depreciated asset value.
+
+    2. The Emotional Marketer: Focus on "Hero Room" psychology (the renovated kitchen) and lifestyle premiums.
+
+    3. The Investor/Flipper: Focus on "As-Is" vs. "After Repair Value" (ARV) and the potential for the buyer to add value.
+Phase 2: Evaluation (The Pruning)
+For each philosophy, analyze:
+
+    - Pros/Cons: What are the risks of this specific strategy given the "Basic" exterior?
+
+    - Impact of Visual Disparity: How does the gap between a "Renovated Kitchen" and "Original Bathroom" affect buyer confidence?
+
+Phase 3: Selection (The Root)
+Compare the three paths. 
+Synthesize the strongest elements into a final Pricing Strategy Recommendation, including a specific suggested listing price relative to the market median and a justification based on the visual assessment.
