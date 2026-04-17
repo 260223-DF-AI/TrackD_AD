@@ -6,12 +6,15 @@ import os
 import sys
 import logging
 import shutil
+import argparse
 from dotenv import load_dotenv
 from torch.utils.data import DataLoader, Dataset
 from torch.utils.tensorboard import SummaryWriter
 from torchvision import transforms, datasets
 from .data_loader import RealEstateDataset
 from torchmetrics import Accuracy, Precision, Recall, F1Score
+
+load_dotenv()
 
 # Set up logging
 logger = logging.getLogger(__name__)
@@ -38,6 +41,7 @@ if not logger.handlers:
 DATA_ROOT = "src/data/"
 TRAIN_DIR = os.path.join(DATA_ROOT, "train")
 TEST_DIR = os.path.join(DATA_ROOT, "test")
+VAL_DIR = os.path.join(DATA_ROOT, "validation")
 LOG_DIR = "runs/estate_insight_logs"
 MODEL_PATH = "estate_insight.pth"
 
@@ -57,12 +61,21 @@ image_transform = transforms.Compose([
     transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
     ])
 
+image_transform_eval = transforms.Compose([
+    
+    transforms.Resize(256),
+    transforms.CenterCrop(224),
+    transforms.ToTensor(),
+    transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
+    ])
+
 train_dataset = RealEstateDataset(TRAIN_DIR, transform=image_transform)
-test_dataset = RealEstateDataset(TEST_DIR, transform=image_transform)
+test_dataset = RealEstateDataset(TEST_DIR, transform=image_transform_eval)
+val_dataset = RealEstateDataset(VAL_DIR, transform=image_transform_eval)
 
-train_loader = DataLoader(train_dataset, batch_size=15, shuffle=True)
+train_loader = DataLoader(train_dataset, batch_size=128, shuffle=True)
 test_loader = DataLoader(test_dataset, batch_size=15, shuffle=False)
-
+val_loader = DataLoader(val_dataset, batch_size=15, shuffle=False)
 num_quality_classes = len(train_dataset.quality_label_map)
 num_type_classes = len(train_dataset.section_label_map)
 
@@ -291,7 +304,7 @@ def evaluate(dataloader, model, loss_fn, device, writer):
 
             # convert to one-hot for BCEWithLogitsLoss
             #quality_target = nn.functional.one_hot(quality_label, num_classes=model.quality_head.out_features).float()
-           # type_target = nn.functional.one_hot(type_label, num_classes=model.type_head.out_features).float()
+            #type_target = nn.functional.one_hot(type_label, num_classes=model.type_head.out_features).float()
 
             # Update torchmetrics
             quality_accuracy.update(q_preds, quality_label)
@@ -429,9 +442,22 @@ def evaluate(dataloader, model, loss_fn, device, writer):
 
     return test_loss / batch_count
 
+def final_test():
+    pass
 
-def main(args):
+def main():
+    # add a way to accept hyperparameters to arguments
+    parser = argparse.ArgumentParser()
 
+    # sagemaker specific args
+    parser.add_argument('--model_dir', type=str, default=os.environ.get('SM_MODEL_DIR', './model'))
+
+    # define the hyperparameters
+    NUM_EPOCHS = 20
+    parser.add_argument('--epochs', type=int, default=NUM_EPOCHS)
+    parser.add_argument('--learning_rate', type=float, default=0.001)
+    args, _ = parser.parse_known_args()
+    
      # sagemaker expects the model to be at SM_MODEL_DIR
     SM_MODEL_PATH = os.path.join(args.model_dir, 'estate_insight.pth')
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -449,7 +475,7 @@ def main(args):
     best_loss = float('inf')
     
 
-    NUM_EPOCHS = 20
+    
     optimizer = optim.Adam(
         filter(lambda p: p.requires_grad, model.parameters()), 
         lr=0.0015
@@ -484,6 +510,7 @@ def main(args):
             logger.info(f"Training stopped early after {epoch+1} epochs due to early stopping")
             break
     
+    final_test = evaluate(val_loader, model, criterion, device, writer)
     code_dir = os.path.join(args.model_dir, 'code')
     os.makedirs(code_dir, exist_ok=True)
     

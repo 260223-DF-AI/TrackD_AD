@@ -12,9 +12,6 @@ import shutil
 import os
 import tarfile
 import boto3
-import io
-from dotenv import load_dotenv
-import argparse
 
 USE_GPU = True
 TRAIN_DEVICE = 'ml.g4dn.xlarge' if USE_GPU else 'ml.m5.large'
@@ -25,20 +22,7 @@ NUM_EPOCHS = 10
 print(f"training on {TRAIN_DEVICE}")
 print(f"deploying on {DEPLOY_DEVICE}")
 
-load_dotenv()
-
-# add a way to accept hyperparameters to arguments
-parser = argparse.ArgumentParser()
-
-# sagemaker specific args
-parser.add_argument('--model_dir', type=str, default=os.environ.get('SM_MODEL_DIR', './model'))
-
-# define the hyperparameters
-parser.add_argument('--epochs', type=int, default=NUM_EPOCHS)
-parser.add_argument('--learning_rate', type=float, default=0.001)
-args, _ = parser.parse_known_args()
-
-#main(args)
+main()
 
 code_dir = os.path.join(LOCAL_MODEL_DIR, 'code')
 os.makedirs(code_dir, exist_ok=True)
